@@ -1,0 +1,2 @@
+# detecTrend
+Predict popular pages
