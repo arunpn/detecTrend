@@ -6,9 +6,9 @@ from sklearn import linear_model
 import matplotlib.pyplot as plt
 plt.ion()
 
-DATA_PATH = '../current/data/'
+DATA_PATH = '../data/'
 
-vid_list_file = h5py.File('../current/vid_list.hdf5', 'r')
+vid_list_file = h5py.File('../vid_list.hdf5', 'r')
 vids = np.copy(vid_list_file['vids'])
 is_test = np.copy(vid_list_file['is_test'])
 vid_list_file.close()

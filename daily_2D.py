@@ -8,7 +8,7 @@ plt.ion()
 
 def extract_features(vids):
 
-    DATA_PATH = '../current/data/'
+    DATA_PATH = '../data/'
     x_date_strs = ['0907', '0908']
     y_date_str = '0909'
 
@@ -35,7 +35,7 @@ def extract_features(vids):
     print('\n')
     return x, y
 
-vid_list_file = h5py.File('../current/vid_list.hdf5', 'r')
+vid_list_file = h5py.File('../vid_list.hdf5', 'r')
 all_vids = np.copy(vid_list_file['vids'])
 is_test = np.copy(vid_list_file['is_test'])
 vid_list_file.close()
