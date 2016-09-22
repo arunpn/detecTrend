@@ -157,10 +157,11 @@ def plot_time_series(t, x, sum_watching_top, num_to_choose):
 
 def extract_features(account_data, org_data, num_to_choose):
     norm_account_data = account_data/(account_data.sum(0)[np.newaxis, :])
-    #norm_org_data = org_data/(account_data.sum(0)[np.newaxis, :])
+    norm_org_data = org_data/(org_data.sum(0)[np.newaxis, :])
     num_hours = norm_account_data.shape[1]
-    x_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float')
-    dx_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float')
+    x_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float') # will hold viewers from time t-1
+    dx_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float') # will hold change of viewers between time t-1 and t-2
+    xo_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float') # will hold orgs from time t-1
     y_t = np.zeros((2*num_to_choose, num_hours), dtype='float')
 
     ix = np.argsort(norm_account_data, 0)
@@ -170,17 +171,22 @@ def extract_features(account_data, org_data, num_to_choose):
             vid_ind_this_hour = ix[-rank_ind, hour_ind]
             x_tm1[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind-1]
             dx_tm1[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind-1] - norm_account_data[vid_ind_this_hour, hour_ind-2]
+            xo_tm1[rank_ind-1, hour_ind] = norm_org_data[vid_ind_this_hour, hour_ind-1]
             y_t[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind]
         
     x_tm1 = x_tm1[:, 2:]
     dx_tm1 = dx_tm1[:, 2:]
+    xo_tm1 = xo_tm1[:, 2:]
     y_t = y_t[:, 2:]
 
     x_tm1 = x_tm1.reshape(2*num_to_choose*(num_hours - 2), 1)
     dx_tm1 = dx_tm1.reshape(2*num_to_choose*(num_hours - 2), 1)
+    xo_tm1 = xo_tm1.reshape(2*num_to_choose*(num_hours - 2), 1)
     y_t = y_t.reshape(2*num_to_choose*(num_hours - 2), 1)
 
-    x_out = np.concatenate((x_tm1, dx_tm1), axis=1)
+    #x_out = np.concatenate((x_tm1, dx_tm1), axis=1)
+    x_out = np.concatenate((x_tm1, dx_tm1, xo_tm1), axis=1)
+
     y_out = y_t
     
     return x_out, y_out
