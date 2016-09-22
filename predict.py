@@ -14,7 +14,8 @@ def get_vid_list(data_path):
 
 def read_data(vids, data_path, t_division):
     
-    data = []
+    account_data = []
+    org_data = []
     
     this_data_file_name = t_division + 'data.hdf5'
     this_division_file_name = t_division + 'division.hdf5'
@@ -23,7 +24,8 @@ def read_data(vids, data_path, t_division):
         print('reading previously saved data')
         sum_hourly_viewers = pd.read_hdf('../' + this_division_file_name)
         in_file = h5py.File('../' + this_data_file_name, 'r')
-        data = np.copy(in_file['data'])
+        account_data = np.copy(in_file['account_data'])
+        org_data = np.copy(in_file['org_data'])
         in_file.close()
     else:
         for vid_ind, vid in enumerate(vids):
@@ -36,34 +38,42 @@ def read_data(vids, data_path, t_division):
                 df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 6, 16), 'account_id':'', 'org_id':''}, [-1]))
                 df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 8, 3), 'account_id':'', 'org_id':''}, [len(df.account_id)]))
                 
-                df_reindexed = df.copy()
-                df_reindexed = df_reindexed.set_index(['submission_time'])
-                #pd.to_datetime(df.Y*10000+df.M*100+df.D,format='%Y%m%d')
-                #year_month_day_hour = pd.to_datetime(2016*10000 + df_reindexed.index.month*100 + df_reindexed.index.day + df_reindexed.index.hour*.01, format='%Y%m%d.%H')
-                year_month_day_hour = pd.to_datetime(2016*1000000 + df_reindexed.index.month*10000 + df_reindexed.index.day*100 + df_reindexed.index.hour, format='%Y%m%d%H')
-                #month_day_hour = 2016*1000000 + df_reindexed.index.month*10000 + df_reindexed.index.day*100 + df_reindexed.index.hour
-                df_reindexed['year_month_day_hour'] = year_month_day_hour
-                num_current_viewers = df_reindexed.groupby('year_month_day_hour').account_id.nunique()
+                df_reind = df.copy()
+                df_reind = df_reind.set_index(['submission_time'])
+                
+                year_month_day_hour = pd.to_datetime(2016*1000000 + df_reind.index.month*10000 + df_reind.index.day*100 + df_reind.index.hour, format='%Y%m%d%H')
+                df_reind['year_month_day_hour'] = year_month_day_hour
+                num_current_viewers = df_reind.groupby('year_month_day_hour').account_id.nunique()
+                num_current_orgs = df_reind.groupby('year_month_day_hour').org_id.nunique()
                 
                 sum_hourly_viewers = num_current_viewers.resample(t_division).sum()
                 sum_hourly_viewers = sum_hourly_viewers.fillna(0)
                 sum_hourly_viewers = sum_hourly_viewers['2016-06-18 00:00:00': '2016-07-27 0:00:00']
                 
+                sum_hourly_orgs = num_current_orgs.resample(t_division).sum()
+                sum_hourly_orgs = sum_hourly_orgs.fillna(0)
+                sum_hourly_orgs = sum_hourly_orgs['2016-06-18 00:00:00': '2016-07-27 0:00:00']
+                
                 shu_array = sum_hourly_viewers.values.astype('float')
-                data.append(shu_array.tolist())
+                sho_array = sum_hourly_orgs.values.astype('float')
+                
+                account_data.append(shu_array.tolist())
+                org_data.append(sho_array.tolist())
                 print(str(vid_ind) + ' ', end='')
             
-        data = np.array(data)
+        account_data = np.array(account_data)
+        org_data = np.array(org_data)
 
         print('\nsaving data to '+this_division_file_name+' '+this_data_file_name)
         sum_hourly_viewers.to_hdf('../' + this_division_file_name, 'w')
         out_file = h5py.File('../' + this_data_file_name, 'w')
-        out_file.create_dataset('data', data=data)
+        out_file.create_dataset('account_data', data=account_data)
+        out_file.create_dataset('org_data', data=org_data)
         out_file.flush()
         out_file.close()
 
     t = sum_hourly_viewers.index
-    return t, data
+    return t, account_data, org_data
 
 def plot_peak_triggered(x):
     mask_x = np.ma.masked_all_like(x)
@@ -145,21 +155,22 @@ def plot_time_series(t, x, sum_watching_top, num_to_choose):
     fig.savefig('time_series.svg')
     return fig
 
-def extract_features(data, num_to_choose):
-    norm_data = data/(data.sum(0)[np.newaxis, :])
-    num_hours = norm_data.shape[1]
+def extract_features(account_data, org_data, num_to_choose):
+    norm_account_data = account_data/(account_data.sum(0)[np.newaxis, :])
+    #norm_org_data = org_data/(account_data.sum(0)[np.newaxis, :])
+    num_hours = norm_account_data.shape[1]
     x_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float')
     dx_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float')
     y_t = np.zeros((2*num_to_choose, num_hours), dtype='float')
 
-    ix = np.argsort(norm_data, 0)
+    ix = np.argsort(norm_account_data, 0)
 
     for hour_ind in range(2, num_hours):
         for rank_ind in range(1, 2*num_to_choose+1):
             vid_ind_this_hour = ix[-rank_ind, hour_ind]
-            x_tm1[rank_ind-1, hour_ind] = norm_data[vid_ind_this_hour, hour_ind-1]
-            dx_tm1[rank_ind-1, hour_ind] = norm_data[vid_ind_this_hour, hour_ind-1] - norm_data[vid_ind_this_hour, hour_ind-2]
-            y_t[rank_ind-1, hour_ind] = norm_data[vid_ind_this_hour, hour_ind]
+            x_tm1[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind-1]
+            dx_tm1[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind-1] - norm_account_data[vid_ind_this_hour, hour_ind-2]
+            y_t[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind]
         
     x_tm1 = x_tm1[:, 2:]
     dx_tm1 = dx_tm1[:, 2:]
@@ -193,12 +204,12 @@ num_to_choose = 10
 t_division = "h"
 
 all_vids = get_vid_list(DATA_PATH)
-t_all, data_all = read_data(all_vids, DATA_PATH, t_division)
-fig_peak_triggered = plot_peak_triggered(data_all)
-sum_watching_top = calc_sum_watching_top(data_all, num_to_choose)
-fig_time_series = plot_time_series(t_all, data_all, sum_watching_top, num_to_choose)
+t_all, account_data_all, org_data_all = read_data(all_vids, DATA_PATH, t_division)
+fig_peak_triggered = plot_peak_triggered(account_data_all)
+sum_watching_top = calc_sum_watching_top(account_data_all, num_to_choose)
+fig_time_series = plot_time_series(t_all, account_data_all, sum_watching_top, num_to_choose)
 
-num_hours_all = data_all.shape[1]
+num_hours_all = account_data_all.shape[1]
 
 is_test_hour = np.arange(num_hours_all) >= num_hours_all - 7*24
 is_train_hour = np.arange(num_hours_all) < num_hours_all - 7*24
@@ -206,8 +217,9 @@ is_train_hour = np.arange(num_hours_all) < num_hours_all - 7*24
 num_hours_test = is_test_hour.sum()
 num_hours_train = is_train_hour.sum()
 
-data_train = np.copy(data_all[:, is_train_hour])
-x_train, y_train = extract_features(data_train, num_to_choose)
+account_data_train = np.copy(account_data_all[:, is_train_hour])
+org_data_train = np.copy(org_data_all[:, is_train_hour])
+x_train, y_train = extract_features(account_data_train, org_data_train, num_to_choose)
 
 x_train_mean, x_train_std = np.mean(x_train, axis=0), np.std(x_train, axis=0)
 y_train_mean, y_train_std = np.mean(y_train, axis=0), np.std(y_train, axis=0)
@@ -243,8 +255,9 @@ hourly_sae = np.sum(np.abs(score_train[:num_to_choose, :] - predicted_score_trai
 hourly_sae = np.sum(np.abs(score_train), axis=0)
 ######################################## test #########################
 
-data_test = np.copy(data_all[:, is_test_hour])
-x_test, y_test = extract_features(data_test, num_to_choose)
+account_data_test = np.copy(account_data_all[:, is_test_hour])
+org_data_test = np.copy(org_data_all[:, is_test_hour])
+x_test, y_test = extract_features(account_data_test, org_data_test, num_to_choose)
 
 x_test_z = x_test
 y_test_z = y_test
@@ -253,7 +266,7 @@ y_test_z = y_test
 
 # Explained variance score: 1 is perfect prediction
 print('Variance score test set: %.2f' % regr.score(x_test_z, y_test_z))
-
+    
 predicted_y_test_z = regr.predict(x_test_z)
 predicted_y_test = predicted_y_test_z
 #predicted_y_test = predicted_y_test_z*y_train_std + y_train_mean
