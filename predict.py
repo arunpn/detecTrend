@@ -12,10 +12,16 @@ def get_vid_list(data_path):
     vids = list(set([dfn.split('.')[0] for dfn in data_file_names]))
     return vids
 
-def read_data(vids, data_path, t_division):
+def get_vid_published_dates(vids):
+    published_date_df = pd.read_hdf('../vid_published_dates.hdf5')
+    vid_dates = []
+    for vid in vids:
+        this_vid_d = published_date_df.datetime[published_date_df.vid==vid].values[0]
+        vid_dates.append(this_vid_d)
+    vid_dates = np.array(vid_dates)
+    return vid_dates
     
-    account_data = []
-    org_data = []
+def read_data(vids, data_path, t_division):
     
     this_data_file_name = t_division + 'data.hdf5'
     this_division_file_name = t_division + 'division.hdf5'
@@ -26,8 +32,13 @@ def read_data(vids, data_path, t_division):
         in_file = h5py.File('../' + this_data_file_name, 'r')
         account_data = np.copy(in_file['account_data'])
         org_data = np.copy(in_file['org_data'])
+        vids_out = np.copy(in_file['vids_out'])
         in_file.close()
     else:
+        account_data = []
+        org_data = []
+        vids_out = []
+    
         for vid_ind, vid in enumerate(vids):
             
             file_name = data_path + vid + '.06-17.08-02.hdf5'
@@ -35,11 +46,11 @@ def read_data(vids, data_path, t_division):
             if len(df) == 0:
                 print(file_name, end='')
             else:
-                df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 6, 16), 'account_id':'', 'org_id':''}, [-1]))
-                df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 8, 3), 'account_id':'', 'org_id':''}, [len(df.account_id)]))
+                df = df.append(pd.DataFrame({'first_start_time':pd.datetime(2016, 6, 16), 'account_id':'', 'org_id':''}, [-1]))
+                df = df.append(pd.DataFrame({'first_start_time':pd.datetime(2016, 8, 3), 'account_id':'', 'org_id':''}, [len(df.account_id)]))
                 
                 df_reind = df.copy()
-                df_reind = df_reind.set_index(['submission_time'])
+                df_reind = df_reind.set_index(['first_start_time'])
                 
                 year_month_day_hour = pd.to_datetime(2016*1000000 + df_reind.index.month*10000 + df_reind.index.day*100 + df_reind.index.hour, format='%Y%m%d%H')
                 df_reind['year_month_day_hour'] = year_month_day_hour
@@ -59,21 +70,24 @@ def read_data(vids, data_path, t_division):
                 
                 account_data.append(shu_array.tolist())
                 org_data.append(sho_array.tolist())
+                vids_out.append(vid)
                 print(str(vid_ind) + ' ', end='')
             
         account_data = np.array(account_data)
         org_data = np.array(org_data)
+        vids_out = np.array(vids_out)
 
         print('\nsaving data to '+this_division_file_name+' '+this_data_file_name)
         sum_hourly_viewers.to_hdf('../' + this_division_file_name, 'w')
         out_file = h5py.File('../' + this_data_file_name, 'w')
         out_file.create_dataset('account_data', data=account_data)
         out_file.create_dataset('org_data', data=org_data)
+        out_file.create_dataset('vids_out', data=vids_out)
         out_file.flush()
         out_file.close()
 
     t = sum_hourly_viewers.index
-    return t, account_data, org_data
+    return vids_out, t, account_data, org_data
 
 def plot_peak_triggered(x):
     mask_x = np.ma.masked_all_like(x)
@@ -155,37 +169,50 @@ def plot_time_series(t, x, sum_watching_top, num_to_choose):
     fig.savefig('time_series.svg')
     return fig
 
-def extract_features(account_data, org_data, num_to_choose):
+def extract_features(account_data, org_data, vid_dates, t_all, num_to_choose):
     norm_account_data = account_data/(account_data.sum(0)[np.newaxis, :])
     norm_org_data = org_data/(org_data.sum(0)[np.newaxis, :])
+    num_vids = norm_account_data.shape[0]
     num_hours = norm_account_data.shape[1]
     x_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float') # will hold viewers from time t-1
     dx_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float') # will hold change of viewers between time t-1 and t-2
     xo_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float') # will hold orgs from time t-1
+    xt_tm1 = np.zeros((2*num_to_choose, num_hours), dtype='float') # will hold time from published from time t-1
     y_t = np.zeros((2*num_to_choose, num_hours), dtype='float')
 
     ix = np.argsort(norm_account_data, 0)
 
     for hour_ind in range(2, num_hours):
         for rank_ind in range(1, 2*num_to_choose+1):
+            #if rank_ind > num_to_choose:
+            #    rand_rank_ind = np.random.randint(rank_ind, 10)
             vid_ind_this_hour = ix[-rank_ind, hour_ind]
             x_tm1[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind-1]
             dx_tm1[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind-1] - norm_account_data[vid_ind_this_hour, hour_ind-2]
             xo_tm1[rank_ind-1, hour_ind] = norm_org_data[vid_ind_this_hour, hour_ind-1]
+            if pd.isnull(vid_dates[vid_ind_this_hour]):
+                dt = np.nan
+            else:
+                dt = (t_all[hour_ind-1] - vid_dates[vid_ind_this_hour]).total_seconds()/(60.*60.)
+            xt_tm1[rank_ind-1, hour_ind] = dt
             y_t[rank_ind-1, hour_ind] = norm_account_data[vid_ind_this_hour, hour_ind]
         
     x_tm1 = x_tm1[:, 2:]
     dx_tm1 = dx_tm1[:, 2:]
     xo_tm1 = xo_tm1[:, 2:]
+    xt_tm1 = xt_tm1[:, 2:]
     y_t = y_t[:, 2:]
 
     x_tm1 = x_tm1.reshape(2*num_to_choose*(num_hours - 2), 1)
     dx_tm1 = dx_tm1.reshape(2*num_to_choose*(num_hours - 2), 1)
     xo_tm1 = xo_tm1.reshape(2*num_to_choose*(num_hours - 2), 1)
+    xt_tm1 = xt_tm1.reshape(2*num_to_choose*(num_hours - 2), 1)
+    xt_tm1[np.isnan(xt_tm1)] = np.nanmean(xt_tm1)
     y_t = y_t.reshape(2*num_to_choose*(num_hours - 2), 1)
 
     #x_out = np.concatenate((x_tm1, dx_tm1), axis=1)
-    x_out = np.concatenate((x_tm1, dx_tm1, xo_tm1), axis=1)
+    #x_out = np.concatenate((x_tm1, dx_tm1, xo_tm1, xt_tm1), axis=1)
+    x_out = np.concatenate((x_tm1, dx_tm1, xt_tm1), axis=1)
 
     y_out = y_t
     
@@ -204,16 +231,36 @@ def viewers2score(y, num_hours, num_to_choose):
     
     return score
 
+def zero_outside_top(account_data, org_data, full_set_size):
+    ix = np.argsort(account_data, 0)
+    account_data_out = np.copy(account_data)
+    org_data_out = np.copy(org_data)
+    for hour_ind in range(account_data.shape[1]):
+        thesh_this_hour = account_data_out[ix[-full_set_size, hour_ind], hour_ind]
+        below_thesh_inds = account_data_out[:, hour_ind] < thesh_this_hour
+        account_data_out[below_thesh_inds, hour_ind] = 0.
+        org_data_out[below_thesh_inds, hour_ind] = 0.
+        
+        while np.sum(account_data_out[:, hour_ind] > 0) > full_set_size:
+            ind = np.argmax(account_data_out[:, hour_ind] == thesh_this_hour)
+            account_data_out[ind, hour_ind] = 0
+            org_data_out[ind, hour_ind] = 0
+    return account_data_out, org_data_out
+
 DATA_PATH = '../data/'
-num_to_choose = 10
+num_to_choose = 5
 
 t_division = "h"
 
 all_vids = get_vid_list(DATA_PATH)
-t_all, account_data_all, org_data_all = read_data(all_vids, DATA_PATH, t_division)
+vids_out, t_all, account_data_all, org_data_all = read_data(all_vids, DATA_PATH, t_division)
+full_set_size = 100
+account_data_all, org_data_all = zero_outside_top(account_data_all, org_data_all, full_set_size)
 fig_peak_triggered = plot_peak_triggered(account_data_all)
 sum_watching_top = calc_sum_watching_top(account_data_all, num_to_choose)
 fig_time_series = plot_time_series(t_all, account_data_all, sum_watching_top, num_to_choose)
+
+vid_dates = get_vid_published_dates(vids_out)
 
 num_hours_all = account_data_all.shape[1]
 
@@ -225,7 +272,7 @@ num_hours_train = is_train_hour.sum()
 
 account_data_train = np.copy(account_data_all[:, is_train_hour])
 org_data_train = np.copy(org_data_all[:, is_train_hour])
-x_train, y_train = extract_features(account_data_train, org_data_train, num_to_choose)
+x_train, y_train = extract_features(account_data_train, org_data_train, vid_dates, t_all, num_to_choose)
 
 x_train_mean, x_train_std = np.mean(x_train, axis=0), np.std(x_train, axis=0)
 y_train_mean, y_train_std = np.mean(y_train, axis=0), np.std(y_train, axis=0)
@@ -263,7 +310,7 @@ hourly_sae = np.sum(np.abs(score_train), axis=0)
 
 account_data_test = np.copy(account_data_all[:, is_test_hour])
 org_data_test = np.copy(org_data_all[:, is_test_hour])
-x_test, y_test = extract_features(account_data_test, org_data_test, num_to_choose)
+x_test, y_test = extract_features(account_data_test, org_data_test, vid_dates, t_all, num_to_choose)
 
 x_test_z = x_test
 y_test_z = y_test
@@ -292,7 +339,8 @@ axROC.plot(f, t)
 
 score_test = viewers2score(y_test, num_hours_test, num_to_choose)
 predicted_score_test = viewers2score(predicted_y_test, num_hours_test, num_to_choose)
+#hourly_sae = np.sum(np.abs(score_test[:num_to_choose, :] - predicted_score_test[:num_to_choose, :]), axis=0)/float(sum(range(num_to_choose+1)))
 hourly_sae = np.sum(np.abs(score_test[:num_to_choose, :] - predicted_score_test[:num_to_choose, :]), axis=0)/float(sum(range(num_to_choose+1)))
-
 plt.figure()
 plt.hist(hourly_sae, num_to_choose)
+print(np.mean(hourly_sae))
