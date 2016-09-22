@@ -12,48 +12,57 @@ def get_vid_list(data_path):
     vids = list(set([dfn.split('.')[0] for dfn in data_file_names]))
     return vids
 
-def read_data(vids, data_path):
+def read_data(vids, data_path, t_division):
     
     data = []
-    all_hours = pd.date_range('2016-06-18', '2016-07-20 13:00:00', freq='h')
-
-    for vid_ind, vid in enumerate(vids):
-        
-        file_name = data_path + vid + '.06-17.08-02.hdf5'
-        df = pd.read_hdf(file_name)
-        if len(df) == 0:
-            print(file_name, end='')
-        else:
-            #df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 6, 16), 'account_id':'', 'org_id':''}, [-1]))
-            #df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 8, 3), 'account_id':'', 'org_id':''}, [len(df.account_id)]))
+    
+    this_data_file_name = t_division + 'data.hdf5'
+    this_division_file_name = t_division + 'division.hdf5'
+    data_path_file_names = os.listdir('../')
+    if this_data_file_name in data_path_file_names and this_division_file_name in data_path_file_names:
+        print('reading previously saved data')
+        sum_hourly_viewers = pd.read_hdf('../' + this_division_file_name)
+        in_file = h5py.File('../' + this_data_file_name, 'r')
+        data = np.copy(in_file['data'])
+        in_file.close()
+    else:
+        for vid_ind, vid in enumerate(vids):
             
-            #df_reindexed = df.set_index(['submission_time'])
-            #all_hours = pd.date_range('2016-06-18', '2016-07-27', freq='h')
-            
-            sum_hourly_viewers = np.zeros(all_hours.shape)
-            for hour_ind, hour in enumerate(all_hours):
-                mask_this_hour = (df.submission_time >= all_hours[hour_ind - 1]) & (df.submission_time < hour)
-                sum_hourly_viewers[hour_ind] = df.loc[mask_this_hour].account_id.nunique()
+            file_name = data_path + vid + '.06-17.08-02.hdf5'
+            df = pd.read_hdf(file_name)
+            if len(df) == 0:
+                print(file_name, end='')
+            else:
+                df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 6, 16), 'account_id':'', 'org_id':''}, [-1]))
+                df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 8, 3), 'account_id':'', 'org_id':''}, [len(df.account_id)]))
                 
-            #num_current_viewers = df.groupby('submission_time').account_id.nunique()
-            #num_current_orgs = df.groupby('submission_time').org_id.nunique()
+                df_reindexed = df.copy()
+                df_reindexed = df_reindexed.set_index(['submission_time'])
+                #pd.to_datetime(df.Y*10000+df.M*100+df.D,format='%Y%m%d')
+                #year_month_day_hour = pd.to_datetime(2016*10000 + df_reindexed.index.month*100 + df_reindexed.index.day + df_reindexed.index.hour*.01, format='%Y%m%d.%H')
+                year_month_day_hour = pd.to_datetime(2016*1000000 + df_reindexed.index.month*10000 + df_reindexed.index.day*100 + df_reindexed.index.hour, format='%Y%m%d%H')
+                #month_day_hour = 2016*1000000 + df_reindexed.index.month*10000 + df_reindexed.index.day*100 + df_reindexed.index.hour
+                df_reindexed['year_month_day_hour'] = year_month_day_hour
+                num_current_viewers = df_reindexed.groupby('year_month_day_hour').account_id.nunique()
+                
+                sum_hourly_viewers = num_current_viewers.resample(t_division).sum()
+                sum_hourly_viewers = sum_hourly_viewers.fillna(0)
+                sum_hourly_viewers = sum_hourly_viewers['2016-06-18 00:00:00': '2016-07-27 0:00:00']
+                
+                shu_array = sum_hourly_viewers.values.astype('float')
+                data.append(shu_array.tolist())
+                print(str(vid_ind) + ' ', end='')
             
-            #sum_hourly_viewers = num_current_viewers.resample("h").sum()
-            #sum_hourly_viewers = sum_hourly_viewers.fillna(0)
-            
-            #sum_hourly_viewers = sum_hourly_viewers['2016-06-18 00:00:00': '2016-07-27 0:00:00']
-            
-            #shu_array = sum_hourly_viewers.values.astype('float')
-            shu_array = sum_hourly_viewers.astype('float')
-            
-            #data.append(shu_array[1:-1].tolist())
-            data.append(shu_array.tolist())
-            print(str(vid_ind) + ' ', end='')
-        
-    data = np.array(data)
-    #t = sum_hourly_viewers.index[1:-1]
-    t = all_hours
-    print('\n')
+        data = np.array(data)
+
+        print('\nsaving data to '+this_division_file_name+' '+this_data_file_name)
+        sum_hourly_viewers.to_hdf('../' + this_division_file_name, 'w')
+        out_file = h5py.File('../' + this_data_file_name, 'w')
+        out_file.create_dataset('data', data=data)
+        out_file.flush()
+        out_file.close()
+
+    t = sum_hourly_viewers.index
     return t, data
 
 def plot_peak_triggered(x):
@@ -179,18 +188,20 @@ def viewers2score(y, num_hours, num_to_choose):
     return score
 
 DATA_PATH = '../data/'
-num_to_choose = 3
+num_to_choose = 10
+
+t_division = "h"
 
 all_vids = get_vid_list(DATA_PATH)
-t_all, data_all = read_data(all_vids, DATA_PATH)
+t_all, data_all = read_data(all_vids, DATA_PATH, t_division)
 fig_peak_triggered = plot_peak_triggered(data_all)
 sum_watching_top = calc_sum_watching_top(data_all, num_to_choose)
 fig_time_series = plot_time_series(t_all, data_all, sum_watching_top, num_to_choose)
 
 num_hours_all = data_all.shape[1]
 
-is_test_hour = np.arange(num_hours_all) >= num_hours_all - 24*7
-is_train_hour = np.arange(num_hours_all) < num_hours_all - 24*7
+is_test_hour = np.arange(num_hours_all) >= num_hours_all - 7*24
+is_train_hour = np.arange(num_hours_all) < num_hours_all - 7*24
 
 num_hours_test = is_test_hour.sum()
 num_hours_train = is_train_hour.sum()
@@ -198,22 +209,23 @@ num_hours_train = is_train_hour.sum()
 data_train = np.copy(data_all[:, is_train_hour])
 x_train, y_train = extract_features(data_train, num_to_choose)
 
-
 x_train_mean, x_train_std = np.mean(x_train, axis=0), np.std(x_train, axis=0)
 y_train_mean, y_train_std = np.mean(y_train, axis=0), np.std(y_train, axis=0)
-#x_train_z = x_train
-#y_train_z = y_train
-x_train_z = (x_train - x_train_mean)/x_train_std
-y_train_z = (y_train - y_train_mean)/y_train_std
+x_train_z = x_train
+y_train_z = y_train
+#x_train_z = (x_train - x_train_mean)/x_train_std
+#y_train_z = (y_train - y_train_mean)/y_train_std
 
 regr = linear_model.LinearRegression()
+#regr.fit_intercept = False
 regr.fit(x_train_z, y_train_z)
 
 print('Coefficients: ', regr.coef_)
 print('Variance score training set: %.2f' % regr.score(x_train_z, y_train_z))
 
 predicted_y_train_z = regr.predict(x_train_z)
-predicted_y_train = predicted_y_train_z*y_train_std + y_train_mean
+predicted_y_train = predicted_y_train_z
+#predicted_y_train = predicted_y_train_z*y_train_std + y_train_mean
 
 fig_train = plt.figure()
 ax_train0 = fig_train.add_subplot(2, 1, 1)
@@ -234,14 +246,17 @@ hourly_sae = np.sum(np.abs(score_train), axis=0)
 data_test = np.copy(data_all[:, is_test_hour])
 x_test, y_test = extract_features(data_test, num_to_choose)
 
-x_test_z = (x_test - x_train_mean)/x_train_std
-y_test_z = (y_test - y_train_mean)/y_train_std
+x_test_z = x_test
+y_test_z = y_test
+#x_test_z = (x_test - x_train_mean)/x_train_std
+#y_test_z = (y_test - y_train_mean)/y_train_std
 
 # Explained variance score: 1 is perfect prediction
 print('Variance score test set: %.2f' % regr.score(x_test_z, y_test_z))
 
 predicted_y_test_z = regr.predict(x_test_z)
-predicted_y_test = predicted_y_test_z*y_train_std + y_train_mean
+predicted_y_test = predicted_y_test_z
+#predicted_y_test = predicted_y_test_z*y_train_std + y_train_mean
 
 fig_test = plt.figure()
 ax_test0 = fig_test.add_subplot(2, 1, 1)
