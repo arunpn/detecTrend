@@ -15,6 +15,7 @@ def get_vid_list(data_path):
 def read_data(vids, data_path):
     
     data = []
+    all_hours = pd.date_range('2016-06-18', '2016-07-20 13:00:00', freq='h')
 
     for vid_ind, vid in enumerate(vids):
         
@@ -23,23 +24,35 @@ def read_data(vids, data_path):
         if len(df) == 0:
             print(file_name, end='')
         else:
-            df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 6, 16), 'account_id':'', 'org_id':''}, [-1]))
-            df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 8, 3), 'account_id':'', 'org_id':''}, [len(df.account_id)]))
-            df['submission_time'] = df['submission_time']
-            num_current_viewers = df.groupby('submission_time').account_id.nunique()
+            #df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 6, 16), 'account_id':'', 'org_id':''}, [-1]))
+            #df = df.append(pd.DataFrame({'submission_time':pd.datetime(2016, 8, 3), 'account_id':'', 'org_id':''}, [len(df.account_id)]))
             
-            sum_hourly_viewers = num_current_viewers.resample("h").sum()
-            sum_hourly_viewers = sum_hourly_viewers.fillna(0)
+            #df_reindexed = df.set_index(['submission_time'])
+            #all_hours = pd.date_range('2016-06-18', '2016-07-27', freq='h')
             
-            sum_hourly_viewers = sum_hourly_viewers['2016-06-18 00:00:00': '2016-07-27 0:00:00']
+            sum_hourly_viewers = np.zeros(all_hours.shape)
+            for hour_ind, hour in enumerate(all_hours):
+                mask_this_hour = (df.submission_time >= all_hours[hour_ind - 1]) & (df.submission_time < hour)
+                sum_hourly_viewers[hour_ind] = df.loc[mask_this_hour].account_id.nunique()
+                
+            #num_current_viewers = df.groupby('submission_time').account_id.nunique()
+            #num_current_orgs = df.groupby('submission_time').org_id.nunique()
             
-            shu_array = sum_hourly_viewers.values.astype('float')
+            #sum_hourly_viewers = num_current_viewers.resample("h").sum()
+            #sum_hourly_viewers = sum_hourly_viewers.fillna(0)
             
-            data.append(shu_array[1:-1].tolist())
+            #sum_hourly_viewers = sum_hourly_viewers['2016-06-18 00:00:00': '2016-07-27 0:00:00']
+            
+            #shu_array = sum_hourly_viewers.values.astype('float')
+            shu_array = sum_hourly_viewers.astype('float')
+            
+            #data.append(shu_array[1:-1].tolist())
+            data.append(shu_array.tolist())
             print(str(vid_ind) + ' ', end='')
         
     data = np.array(data)
-    t = sum_hourly_viewers.index[1:-1]
+    #t = sum_hourly_viewers.index[1:-1]
+    t = all_hours
     print('\n')
     return t, data
 
@@ -99,7 +112,7 @@ def calc_sum_watching_top(data, num_to_choose):
         sum_watching_top[hour_ind] = np.sum(data[ix[-num_to_choose:, hour_ind], hour_ind])
     return sum_watching_top
 
-def plot_time_series(t, x, sum_watching_top):
+def plot_time_series(t, x, sum_watching_top, num_to_choose):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(t, x.sum(0), color=[.8, .8, .8])
@@ -110,7 +123,7 @@ def plot_time_series(t, x, sum_watching_top):
 
     ax2 = ax.twinx()
     ax2.plot(t, 100*sum_watching_top/x.sum(0), color='r')
-    ax2.set_ylabel('Watching top 5 (%)', color='r')
+    ax2.set_ylabel('Watching top ' + str(num_to_choose) + ' (%)', color='r')
     for tl in ax2.get_yticklabels():
         tl.set_color('r')
     ax2.set_ylim((0, 100))
@@ -172,7 +185,7 @@ all_vids = get_vid_list(DATA_PATH)
 t_all, data_all = read_data(all_vids, DATA_PATH)
 fig_peak_triggered = plot_peak_triggered(data_all)
 sum_watching_top = calc_sum_watching_top(data_all, num_to_choose)
-fig_time_series = plot_time_series(t_all, data_all, sum_watching_top)
+fig_time_series = plot_time_series(t_all, data_all, sum_watching_top, num_to_choose)
 
 num_hours_all = data_all.shape[1]
 
