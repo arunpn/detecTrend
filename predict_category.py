@@ -225,9 +225,9 @@ def extract_features(account_data, org_data, vid_dates, t_all, num_to_choose):
     xt_tm1[np.isnan(xt_tm1)] = np.nanmean(xt_tm1)
     y_t = y_t.reshape(2*num_to_choose*(num_hours - 2), 1)
 
-    x_out = np.concatenate((x_tm1, dx_tm1, xo_tm1, xt_tm1), axis=1)
+    #x_out = np.concatenate((x_tm1, dx_tm1, xo_tm1, xt_tm1), axis=1)
 
-    #x_out = x_tm1
+    x_out = x_tm1
     #x_out = x_tm2
     #x_out = xo_tm1
     #x_out = dx_tm1
@@ -296,18 +296,15 @@ num_hours_all = account_data_all.shape[1]
 
 for data_set in ['train', 'test']:
     if data_set == 'train':
-        is_in_set_hour = np.arange(num_hours_all) < num_hours_all - 7*24
+        is_in_set_hour = np.arange(num_hours_all) < num_hours_all - 2*7*24
     elif data_set == 'test':
-        is_in_set_hour = np.arange(num_hours_all) >= num_hours_all - 7*24
+        is_in_set_hour = np.arange(num_hours_all) >= num_hours_all - 2*7*24
 
     num_hours_set = is_in_set_hour.sum()
 
     account_data = np.copy(account_data_all[:, is_in_set_hour])
     org_data = np.copy(org_data_all[:, is_in_set_hour])
     x, y = extract_features(account_data, org_data, vid_dates, t_all, num_to_choose)
-    
-    y[x[:, 0]==0] = 0
-    x[x[:, 0]==0, :] = 0
         
     y_score = viewers2score(y, num_hours_set, num_to_choose) > 0
 
@@ -325,6 +322,7 @@ for data_set in ['train', 'test']:
     print('Variance score '+data_set+' set: %.2f' % regr.score(x, y))
 
     predicted_y = regr.predict(x)
+    predicted_y[x[:, 0]==0] = 0 # otherwise unfair selection bias
 
     predicted_y_score = viewers2score(predicted_y, num_hours_set, num_to_choose) > 0
     
@@ -333,8 +331,8 @@ for data_set in ['train', 'test']:
     f, t, th = metrics.roc_curve(y_score.ravel(), predicted_y)
     axROC.plot(f, t, label=data_set+'Linear regression')
     
-    axRaw.plot(x, predicted_y, '.', label=data_set+'Linear regression')
-
+    axRaw.plot(x[:, 0], predicted_y, '.', label=data_set+'Linear regression')
+    """
     if data_set == 'train':
         #clf = svm.SVC()
         #clf = tree.DecisionTreeClassifier()
@@ -342,14 +340,16 @@ for data_set in ['train', 'test']:
         clf.fit(x, y_score.ravel())
         
     #predicted_y = clf.decision_function(x)
-    predicted_y = clf.predict_proba(x)[:,1]
+    predicted_y = clf.predict_proba(x)[:, 1]
+    predicted_y[x[:, 0]==0] = 0 # otherwise unfair selection bias
     predicted_y_score = viewers2score(predicted_y, num_hours_set, num_to_choose) > 0
     print('RF Accuracy score '+data_set+' set: %.2f' % metrics.accuracy_score(y_score.ravel(), predicted_y_score.ravel()))
 
     f, t, th = metrics.roc_curve(y_score.ravel(), predicted_y.ravel())
     axROC.plot(f, t, ':', label=data_set+' Random forest')
-    
+    """
     axRaw.plot(x[:, 0], predicted_y, '.', label=data_set+' Random forest')
+    
     axRaw.plot(x[:, 0], y, '.', label=data_set+' real')
 
 axROC.legend(loc='lower right')
