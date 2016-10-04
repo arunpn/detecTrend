@@ -32,11 +32,14 @@
           <a id="breadcrumbs_banner" href="http://ptweir.github.io/">ptweir home</a><a id="breadcrumbs_child" href="http://ptweir.github.io/detecTrend/">DetecTrend</a>
           <h1 id="project_title">DetecTrend</h1>
           <h2 id="project_tagline">Predict popular pages</h2>
-
-            <section id="downloads">
-              <a class="zip_download_link" href="https://github.com/ptweir/detecTrend/zipball/master">Download this project as a .zip file</a>
-              <a class="tar_download_link" href="https://github.com/ptweir/detecTrend/tarball/master">Download this project as a tar.gz file</a>
-            </section>
+            
+          <h7>
+          <a href="#summary" class="btn">Summary</a><font color="white"> |</font>
+          <a href="#approach" class="btn">Approach</a><font color="white"> |</font>
+          <a href="#results" class="btn">Results</a><font color="white"> |</font>
+          <a href="#author" class="btn">Author</a><font color="white"> |</font>
+          </h7>
+            
         </header>
     </div>
 
@@ -46,9 +49,9 @@
         <h3>
 <a id="welcome" class="anchor" href="#welcome" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Predicting popular YouTube videos among K-12 students</h3>
 
-<h6>Summary</h6>
+<h6 id="summary">Summary</h6>
 <p class="c2"><span class="c1">The California-based company <a class="c4" href="https://www.goguardian.com/" target="_blank">GoGuardian</a> helps teachers and school administrators manage Chromebooks for millions of K-12 students nationwide. These Chromebooks represent enormous educational potential, but we all know just how distracting unlimited access to the Internet can be. To further the mission of educators, GoGuardian provides a variety of services that help schools filter content and protect students online. Among their key products is a smart YouTube filter. This feature is important because at any hour of the day approximately </span><span class="c3">35%</span><span class="c1">&nbsp;of students are watching YouTube </span><sup><a href="#ftnt1" id="ftnt_ref1">[1]</a></sup><span>. YouTube hosts a large amount of valuable educational content, so blocking the entire domain would be overly restrictive. Unfortunately, it hosts even more content that is distracting and not useful in an educational context. To filter the wheat from the chaff, GoGuardian would like to surface a small number of trending videos to administrators and teachers, thereby enabling them to make the decision whether any particular video should be accessible via school-provided laptops. I consulted with GoGuardian to create the model underlying this dashboard. The resulting model pulls data from YouTube's API and accurately predicts popular videos so that schools can make independent decisions of what each school wants or doesn't want students to watch. This model enables schools to make the final filtering decision using a dashboard provided by GoGuardian.</span></p><p class="c0"><span class="c1"></span></p>
-<h6>Approach</h6>
+<h6 id="approach">Approach</h6>
 <p class="c2"><span class="c1">Trying to filter all the videos on YouTube at any given time by hand would be impossible. Luckily, a large and fairly constant proportion of students are usually watching a small number of top videos.</span></p><p class="c0"><span class="c1"></span></p>
 <object data="./images/timeseries.svg" type="image/svg+xml">
   <img src="fallback.jpg" />
@@ -65,7 +68,7 @@
 
 <div align="center"><img width="90%" src="./images/time_since_published_hist.svg"></div>
 
-<h6>Results</h6>
+<h6 id="results">Results</h6>
 <p class="c0"><span class="c1"></span></p><p class="c2"><span class="c1">Because videos become popular almost immediately after being posted, a simple and amazingly effective algorithm for identifying the top 5 videos an hour from now is to look at the top 5 videos right now. Deploying this algorithm on my 2 week test set, I achieve </span><span class="c3">80%</span><span class="c1">&nbsp;average accuracy in predicting the top 5 videos in each hour. The distribution of this performance is plotted below, where you can see that I get 4 or 5 out of 5 right over &frac34; of the time.</span></p><p class="c0"><span class="c1"></span></p>
 
 <div align="center"><img width="50%" src="./images/performance_hist.svg"></div>
@@ -76,12 +79,12 @@
 
 <p class="c0"><span class="c1"></span></p><p class="c2"><span class="c1">In conclusion, even seemingly unpredictable trends can be used to build smart tools for administrators to filter content for students.</span></p><p class="c0"><span class="c1"></span></p><p class="c0"><span class="c1"></span></p><p class="c0"><span></span></p>
 
-<hr class="c8"><div><p class="c1"><a href="#ftnt_ref1" id="ftnt1">[1]</a><span class="c7">&nbsp;For the dataset I had access to, ~12,000 unique users were typically online in an hour, and ~4,300 of them were on YouTube.</span></p></div>
-
-<h3>
-<a id="authors-and-contributors" class="anchor" href="#authors-and-contributors" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Authors and Contributors</h3>
+<h6 id="author">Author</h6>
 
 <p>Peter Weir (<a href="https://github.com/ptweir" class="user-mention">@ptweir</a>) is an Insight Data Science Fellow located in San Francisco, CA.</p>
+
+<hr class="c8"><div><p class="c1"><a href="#ftnt_ref1" id="ftnt1">[1]</a><span class="c7">&nbsp;For the dataset I had access to, ~12,000 unique users were typically online in an hour, and ~4,300 of them were on YouTube.</span></p></div>      
+      
       </section>
     </div>
 
